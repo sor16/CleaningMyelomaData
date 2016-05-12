@@ -6,6 +6,7 @@ library(magrittr)
 library(plyr)
 library(xlsx)
 Sys.setlocale(category="LC_ALL",locale="is_IS")
+setwd(../data)
 load("mmcomdat.Rdata")
 #Baetum vid thremur breytum, follow up (fu), rokbreytuna dead sem lysir hvort sjuklingur do a timabilinu og time from diagnosis
 mmcomdat <- mmcomdat %>% ungroup() %>% mutate(fu=fudeath-diadat_case,dead=fudeath != "2013-12-31",timeFromDiagnosis = INDATUM-diadat_case)
