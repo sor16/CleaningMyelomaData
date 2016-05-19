@@ -1,10 +1,22 @@
+#Fall sem endurritar breytu jafn oft og vigurinn uniqueDist gerir ráð fyrir
+DuplicateVariables <- function(variable){
+    newVar <- rep(variable[[names(variable)]],times=c(uniqueDist,nrow(canmm)-sum(uniqueDist))) %>% data.frame()
+    names(newVar) <- names(variable)
+    newVar
+}
 #Fall sem finnur tha greiningu sem er naest myeloma greiningu
 LeastTimeFromDiagnosis <- function(data){
     data %>% group_by(lopnr) %>% slice(abs(timeFromDiagnosis) %>% which.min()) %>% ungroup()
 }
 #Fall sem finnur allar linur i mmcomdat sem passa vid gefinn ICD koda
 matchICD <- function(data,patternToAdd){
-    data %>% select(lopnr,timeFromDiagnosis,diag)  %>% filter(grepl(pattern = patternToAdd,data$diag))
+    #data <- 
+    data %>% select(lopnr,timeFromDiagnosis,diag,ICD)  %>% filter(grepl(pattern = patternToAdd,data$diag))
+    # dataICD <- data %>% select(diag,ICD) %>% unite(col="diagICD",diag,ICD) %>% '[['(1)
+    # StandardICD <- ICDCodesTable %>% select(matches(names(patternToAdd))) %>% bind_cols(ICDStandard %>% select(matches(names(patternToAdd))))
+    # names(StandardICD) = c("diag","ICD")
+    # StandardICD <- StandardICD %>% unite(col="diagICD",diag,ICD) %>% '[['(1)
+    # data <- data %>% filter(dataICD %in% StandardICD) 
 }
 
 
