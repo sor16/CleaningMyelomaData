@@ -1,0 +1,168 @@
+---
+title: "CleanMMdata"
+author: "Ingigerdur Solveig Sverrisdottir"
+date: "15 June 2016"
+output: html_document
+---
+
+#Packages used:
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(magrittr)
+library(readxl)
+library(lubridate)
+library(xlsx)
+library(knitr)
+```
+
+```{r}
+read_chunk("clean.R")
+```
+
+#Loading of data:
+```{r, echo=FALSE, include=FALSE}
+setwd("~/Dropbox/MergaexliReiknir/CleaningMyelomaData")
+source("HelpFunctions.R")
+setwd("../data")
+load("mmspmdatvs1krufnExl.RData")
+load("mmcomdat.Rdata")
+```
+
+
+#Introduction: 
+The aim of this research project is to develop a risk model for patients diagnosed with Multiple Myeloma in relation to their co-morbidities. The explanatory variables are therefore chronic diseases that a patient is suffering from which often do have an effect on survival of these patients.
+
+#####Registries and Patient Cohort:
+Sweden provides universal medical care for the entire population, currently approximately 9.8 million people. Patients with hematologic disorders are typically diagnosed, treated, and followed clinically by physicians at hospital-based hematology or oncology centers.
+
+Since 1958, all physicians in Sweden have been required to report each case of cancer that they diagnose to the nationwide Swedish Cancer Register. The Register holds information on diagnosis, sex, date of birth, date of diagnosis, and area and hospital where the diagnosis was made, and has been reported to have more than 95% coverage for MM during the study period (ref Tureson) 
+
+All patients diagnosed with MM from January 1 1973 to December 31 2013 were identified from the Swedish Cancer Register, with follow-up until June 2016. Information was collected on gender, date of birth, and date of MM diagnosis. Information on comorbidities was gathered from the Swedish Patient Registry, which captures information on individual patient-based discharge diagnoses and discharge listings from all inpatient care, with a very high coverage (ref EpC). Furthermore,  information from outpatient registries were available from 20xx and those diagnoses were included as well. For cancer diagosis, all malignancies were identified through crosslinkage within the Swedish Cancer Registry. Information on date of death was gathered from the Cause of Death Registry.
+
+#####Comorbidity data:
+Every single diagnosis for each patient was identified from the Swedish Patient Registry. All diagnoses before MM diagnoses were included, with the exeption of Chronic Kidney disease, were diagnosis had to be six months prior to the MM diagnosis. The following variables were created using ICD 8,9 and 10 codes: Autoimmune disease, Hypertension, Cardiac Failure, Arrythmias, Atrial Fibrillation, Chronic Lung Disease, Prior Malignancy, Ischaemic Heart disease, Diabetes Mellitus, Chronic hepatitis, Liver Failure, Hemiplegia, Dementia, Depression/Anxiety, Peripheral Vascular disease, Stroke/TIA and Peptic Ulcer. (ICD codes for each are shown in appendix)
+
+
+#Data cleaning:
+Variables included in the data: 
+Lopnr: Unique number given to each patient
+INDATUM: Date of diagnosis from the Swedish Patient Register
+Diag: ICD code of diagnosis (both comorbitidies and MM)
+Diadat_case: date of MM diagnosis
+Byear: Year of birth
+KON: Gendar
+Fudeath: date of death from Cause of death registry
+```{r}
+#Choosing variables, discarding those which are not important:
+mmcomdat <- mmcomdat %>% ungroup() %>% select(lopnr,INDATUM,diag,diadat_case,byear,KON,fudeath) %>% dplyr::rename(kon=KON)
+
+#Removing unneccessary ICD-codes: 
+notWanted <-  c("O","P","Q","S","T","U","W","V","Y","Z")
+mmcomdat <- mmcomdat %>% filter(!(notWanted %>% paste(collapse="|") %>% grepl(diag)))
+
+#Removing those who are likely to be lost to follow-up (exceeding 30 years of survival after MM diagnosis).
+mmcomdat <- mmcomdat %>% filter(fudeath-diadat_case < 30*365.25 | fudeath != "2013-12-31")
+
+#Remove everyone diagnosed before January 1 1973:
+mmcomdat <- mmcomdat %>% filter(diadat_case >="1973-01-01")
+
+```
+
+#Cancer data:
+For the cancer diagnosis, we cross-linked the Swedish Cancer Register with the Swedish Patient Registry to have correct data on previously diagnosed malignancy. All cancers were included exepct non-melanoma skin cancer. 
+```{r}
+canData <- mmspmdatvs1krufnExl %>% filter(group=="cases" & diadat_case >= "1973-01-01" & fudeath-diadat_case > 0) %>% mutate(Cancer=!is.na(can.pre),INDATUM=diadat_case,diag=NA) %>% select(lopnr,INDATUM,diag,diadat_case,byear,KON,fudeath,Cancer) %>% dplyr::rename(kon=KON)
+mmcomdat <- mmcomdat %>% filter(!grepl("^C|^[1][0-9][0-9]|^[2][0-3][0-9]",mmcomdat$diag)) %>% mutate(Cancer=FALSE)
+mmcomdat <- mmcomdat %>% rbind(canData)
+#mmcomdat <- mmcomdat %>% filter(!grepl("^$", mmcomdat$diag))
+```
+
+
+#Creating variables for survival and comorbidity analysis 
+For survival analysis a few variables need to be added to the data. We added total follow-up as well as a binary variable for survival status at end of follow-up (dead, true/false). Additionally, age at diagnosis was calculated and the cohort was divided into four calendar periods: 1973 to 1982, 1983 to 1992, 1993 to 2002 and 2003 to 2013. 
+For comorbidity, time from comorbidity diagnosis to MM diagnosis was added as well. 
+
+```{r}
+mmcomdat <- mmcomdat %>% mutate(fu=fudeath-diadat_case)
+mmcomdat <- mmcomdat %>% mutate(dead=fudeath != "2013-12-31") 
+mmcomdat <- mmcomdat %>% mutate(timeFromDiagnosis = INDATUM-diadat_case)
+mmcomdat <- mmcomdat %>% mutate(diag_year=year(diadat_case))
+mmcomdat <- mmcomdat %>% mutate(age = year(diadat_case)-byear)
+mmcomdat <- mmcomdat %>% mutate(era = cut(diadat_case, breaks = c('1973-01-01','1983-01-01','1993-01-01','2003-01-01','2014-01-01') %>%
+                                        as.Date(),labels=c("1973-1982","1983-1992","1993-2002","2003-2013")))
+```
+
+ 
+We rule out those diagnosed with MM after death and comorbidities diagnosed after MM: 
+```{r}
+mmcomdat <-  mmcomdat %>% filter(fu > 0 & INDATUM - diadat_case <= 0)
+```
+
+
+#Creating a new data set: 
+We create a new data set, OutData, which includes all the comorbidities listed above as binary variables, for each lopnr, so no patient will be duplicated in the data. Age at diagnosis, follow-up time, survival status, gender, birthyear, year at diagnosis, and calendar year are added as well. ICD codes for each disease are subtracted from an excel document. 
+
+```{r}
+#Removing commas from ICD-codes in excel:  
+mmcomdat$diag=gsub(",","",mmcomdat$diag)
+
+#Creating OutData with distinct lopnr, starting with cancer diagnosis which is cross-linked with another data set: 
+outData <-  mmcomdat %>% select(lopnr,diadat_case,fudeath,byear,dead,kon,era,diag_year,age,fu) %>% distinct(lopnr)
+outData <- outData %>% cbind(mmcomdat %>% group_by(lopnr) %>% mutate(Cancer=sum(Cancer)!=0) %>% ungroup() %>% distinct(lopnr) %>% select(Cancer))
+
+#Matching ICD-codes: 
+ICDStandard=read_excel("greiningarkodarprufa.xlsx",sheet="ICDMatch")
+ICDCodesTable=read_excel("greiningarkodarprufa.xlsx",sheet="ICDCodes",col_types=rep("text",ncol(ICDStandard)))
+ICDCodesList=ICDCodesTable %>% lapply(function(i){
+    paste("^",gsub("\\.", ",",i) %>% subset(!is.na(i)) %>%  as.character(),"$",sep="") %>% paste(collapse="|")
+    }) %>% data.frame(stringsAsFactors=F)
+
+#Extracta einfaldar breytur og síðan þær sem þurfa frekari flokkun
+ICDCodesUnique=ICDCodesList %>% select(-contains("Type"))
+ICDCodesSykur=ICDCodesList %>% select(contains("Type"))
+
+#For chronic kidney disease, the diagnosis has to be at least 6 months prior to MM diagnosis: 
+mmcomdat <- mmcomdat %>% mutate(diag=ifelse(grepl(ICDCodesList$Chronic.renal.disease,mmcomdat$diag) & mmcomdat$timeFromDiagnosis > -365.25/2,NA,mmcomdat$diag))
+
+#Adding boolean variables for comorbitities:
+outData <- outData %>% cbind(lapply(1:ncol(ICDCodesUnique),function(i) AddBooleanDisease(mmcomdat,outData,ICDCodesUnique[i])) %>%data.frame(stringsAsFactors=F))
+
+#Bæti við flokkun á sykursýki
+outData <- outData %>% cbind(lapply(1:ncol(ICDCodesSykur),function(i){
+                                mmcomdat %>% matchICD(ICDCodesUnique$Diabetes.Mellitus) %>% LeastTimeFromDiagnosis() %>% AddBooleanDisease(outData=outData,variable=ICDCodesSykur[i]) %>% data.frame(stringsAsFactors=F)
+                                }))
+
+outData <- outData %>% unite_(col="Diabetes.cat",names(ICDCodesList)[grep("Type",names(ICDCodesList))])
+outData$Diabetes.cat <- factor(outData$Diabetes.cat,
+                                    levels=c("FALSE_FALSE_FALSE","TRUE_FALSE_FALSE","FALSE_TRUE_FALSE","FALSE_FALSE_TRUE"),
+                                    labels = c("None", "Dependent", "Independent","Unknown"))
+outData <- outData %>% mutate(Diabetes.cat.time <- do.call(pmin, outData %>% select(Diabetes.Mellitus.Type.1.time, Diabetes.Mellitus.Type.2.time, Unknown.Diabetes.Type.time))) 
+outData <- outData %>% select(-contains("Type"))
+#Bæta við fjölda af comorbidities
+comorbCount <- outData %>% select(matches(paste("^",names(ICDCodesUnique),"$",collapse="|",sep=""))) %>% rowSums()
+outData <- outData %>% mutate(comorbCount=comorbCount)
+
+
+```
+
+
+```{r}
+#Save outData to disk
+setwd("~/Dropbox/MergaexliReiknir/LikanSamantekt")
+save(outData,file="outData.RData")
+
+#outputa gögn inní Shiny App
+setwd("~/Dropbox/MergaexliReiknir/RiskUI")
+futime <- with(outData,as.numeric(fudeath-diadat_case))
+ShinyData <- outData %>% filter(era==4)
+save(ShinyData,file="ShinyData.RData")
+```
+
+
+
+
+
+
+

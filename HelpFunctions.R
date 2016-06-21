@@ -11,7 +11,7 @@ LeastTimeFromDiagnosis <- function(data){
 #Fall sem finnur allar linur i mmcomdat sem passa vid gefinn ICD koda
 matchICD <- function(data,patternToAdd){
     #data <- 
-    data %>% select(lopnr,timeFromDiagnosis,diag,ICD)  %>% filter(grepl(pattern = patternToAdd,data$diag))
+    data %>% select(lopnr,timeFromDiagnosis,diag)  %>% filter(grepl(pattern = patternToAdd,data$diag))
     # dataICD <- data %>% select(diag,ICD) %>% unite(col="diagICD",diag,ICD) %>% '[['(1)
     # StandardICD <- ICDCodesTable %>% select(matches(names(patternToAdd))) %>% bind_cols(ICDStandard %>% select(matches(names(patternToAdd))))
     # names(StandardICD) = c("diag","ICD")
@@ -25,7 +25,8 @@ matchICD <- function(data,patternToAdd){
 AddBooleanDisease <- function(Orgdata,outData,variable){
     matchVariable <- Orgdata %>% matchICD(variable) %>% LeastTimeFromDiagnosis() 
     newVar <-  outData$lopnr %in% matchVariable$lopnr
-    matchVariable <- matchVariable %>% mutate(lopnrToOrderFrom=outData[newVar,]$lopnr)
+    lopnrToOrderFrom=outData[newVar,]$lopnr
+    matchVariable <- matchVariable %>% mutate(lopnrToOrderFrom=lopnrToOrderFrom)
     outData <- outData %>% mutate(newVar.time=Inf)
     outData[newVar,"newVar.time"]=matchVariable[with(matchVariable,match(lopnrToOrderFrom,lopnr)),]$timeFromDiagnosis
     VarAndTime=newVar %>% data.frame(outData$newVar.time) 
