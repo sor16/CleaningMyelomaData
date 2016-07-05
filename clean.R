@@ -124,10 +124,5 @@ setwd(homeDir)
 setwd("~/Dropbox/MergaexliReiknir/LikanSamantekt")
 save(outData,file="outData.RData")
 
-#outputa gögn inní Shiny App
-setwd("~/Dropbox/MergaexliReiknir/RiskUI")
-futime <- with(outData,as.numeric(fudeath-diadat_case))
-ShinyData <- outData %>% filter(era=="2003-2013")
-save(ShinyData,file="ShinyData.RData")
-setwd(homeDir)
+
 
