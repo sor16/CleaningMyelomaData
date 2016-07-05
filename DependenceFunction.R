@@ -1,4 +1,8 @@
+library(viridis)
+method="Beta3"
+filename="Beta3"
 #Næ í Cox líkanið
+setwd("~/Dropbox/MergaexliReiknir/cleaningMyelomaData")
 source("CoxFitting.R")
 #Finn öll mismunandi pör af breytum 
 pairsOfVariables <- combn(namesOfVariables,m=2) %>% as.character()
@@ -19,7 +23,7 @@ variableDependence <- lapply(1:noPairs,function(i){
             data.frame(coef=prod(coxModel$coefficients[nameExtractCoef,2]),pval=coxModel$coefficient[nameExtract,5],
                        variable1=variable1,variable2=variable2)
         }
-    }) %>% rbind_all()
+    }) %>% bind_rows()
 #Bæta við none, þ.e. ekki parað við neitt
 variableDependence <- variableDependence %>% rbind(lapply(1:(length(namesOfVariables)),function(i){
     formula <- paste("surv_object",paste(c(leidrettVariables,namesOfVariables[i]),collapse="+"),sep="~") %>% as.formula()
@@ -27,7 +31,7 @@ variableDependence <- variableDependence %>% rbind(lapply(1:(length(namesOfVaria
         nameExtract <- paste(namesOfVariables[i],"TRUE",sep="")
         data.frame(coef=coxModel$coefficients[nameExtract,2],pval=coxModel$coefficients[nameExtract,5],
                    variable1=namesOfVariables[i],variable2="None")
-    }) %>% rbind_all())
+    }) %>% bind_rows())
 
 ###PLOTS###-------------------------------------------------------------------------------------------------------------
 #Bæti við flokkabreytu útfrá stuðlum 
@@ -46,7 +50,7 @@ DuplicateReverse <- variableDependence %>% dplyr::rename(variable1=variable2,var
 ticks <- namesOfVariables %>% unique() %>% sort()
 ticks <- c("None",ticks[ticks!="None"])
 variableDependence <- variableDependence %>%rbind(DuplicateReverse) %>% mutate_each(funs(factor(., levels=ticks)),matches("variable")) %>% mutate(Interesting=replace(coef, pval>0.05 | count<20, NA))
-setwd("~/Dropbox/MergaexliReiknir/LikanSamantekt")
+setwd("~/Dropbox/MergaexliReiknir/data")
 save(variableDependence,file="variableDependence.RData")
 #Teikna mynd af coef útfrá samfelldum og strjálum skala
 plotDependence=list()
